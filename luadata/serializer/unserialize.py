@@ -371,7 +371,7 @@ def unserialize(raw, encoding="utf-8", multival=False, verbose=False, G=None):
                         pos = pos - 1
                     else:
                         key = None
-                        errmsg = "invalied table simple key character."
+                        errmsg = "invalid table simple key character."
                         break
         pos += 1
         if verbose:
