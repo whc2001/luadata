@@ -51,7 +51,7 @@ def unserialize(raw, encoding="utf-8", multival=False, verbose=False, G=None):
         node["entries"].sort(key=sorter)
         lualen = 0
         for kv in node["entries"]:
-            if kv[0] == lualen + 1:
+            if (not isinstance(kv[0], bool)) and kv[0] == lualen + 1:
                 lualen = lualen + 1
         node["lualen"] = lualen
 
@@ -294,18 +294,6 @@ def unserialize(raw, encoding="utf-8", multival=False, verbose=False, G=None):
                 state = "FLOAT"
                 component_name = "KEY"
                 pos1 = pos
-            elif byte_current == b"t" and sbins[pos : pos + 4] == b"true":
-                errmsg = "python do not support bool as dict key."
-                break
-                key = True
-                state = "KEY_EXPRESSION_FINISH"
-                pos = pos + 3
-            elif byte_current == b"f" and sbins[pos : pos + 5] == b"false":
-                errmsg = "python do not support bool variable as dict key."
-                break
-                key = False
-                state = "KEY_EXPRESSION_FINISH"
-                pos = pos + 4
             elif byte_current == b"{":
                 errmsg = "python do not support lua table variable as dict key."
                 break
@@ -359,7 +347,7 @@ def unserialize(raw, encoding="utf-8", multival=False, verbose=False, G=None):
                 comment = "INLINE"
                 pos = pos + 1
             elif byte_current == b"=":
-                if "." in key:
+                if "." in key or key == "false" or key == "true":
                     errmsg = "invalid simple key"
                     break
                 state = "VALUE"

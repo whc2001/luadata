@@ -4,6 +4,7 @@ from unserialize import unserialize
 
 
 class TestSerializeMethods(unittest.TestCase):
+
     def test_string(self):
         self.assertEqual(serialize("str"), '"str"')
 
@@ -179,7 +180,7 @@ class TestUnserializeMethods(unittest.TestCase):
                 "NestVal2": "22"
             }
     }
-    
+
     def test_global_array(self):
         for i in unserialize('{{ Val1 , 1}, {Val2, "2"}, { Nest1.NestVal1 , 11}, {Nest1.NestVal2, "22"}}', G=self.G):
             self.assertEqual(i[0], i[1])
@@ -189,6 +190,17 @@ class TestUnserializeMethods(unittest.TestCase):
         for k, v in unserialize('{ Val1 = "Val1", [ Val1 ] = 1, [Val2] = "2", [Nest1.NestVal1] = 11, [ Nest1.NestVal2 ] = "22"}', G=self.G).items():
             self.assertEqual(k, v)
             self.assertEqual(type(k), type(v))
+
+    def test_bool_key(self):
+        self.assertEqual(
+            unserialize('{ [true] = 1, [false] = 2 }'),
+            { True: 1, False: 2 },
+        )
+        self.assertEqual(
+            unserialize('{ [true] = 1, [true] = 2 }'),
+            { True: 2 },
+        )
+
 
     def test_global_array_invalid(self):
         try:
@@ -203,6 +215,6 @@ class TestUnserializeMethods(unittest.TestCase):
             self.assertTrue(False)
         except:
             self.assertTrue(True)
-
+    
 if __name__ == "__main__":
     unittest.main()
