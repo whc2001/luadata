@@ -171,6 +171,38 @@ class TestUnserializeMethods(unittest.TestCase):
         self.assertEqual(unserialize("{ --[[comment]]1}"), [1])
         self.assertEqual(unserialize("{ --[[comment\n ]]\n1}"), [1])
 
+    G = {
+            "Val1": 1,
+            "Val2":"2",
+            "Nest1": {
+                "NestVal1": 11,
+                "NestVal2": "22"
+            }
+    }
+    
+    def test_global_array(self):
+        for i in unserialize('{{ Val1 , 1}, {Val2, "2"}, { Nest1.NestVal1 , 11}, {Nest1.NestVal2, "22"}}', G=self.G):
+            self.assertEqual(i[0], i[1])
+            self.assertEqual(type(i[0]), type(i[1]))
+
+    def test_global_dict(self):
+        for k, v in unserialize('{ Val1 = "Val1", [ Val1 ] = 1, [Val2] = "2", [Nest1.NestVal1] = 11, [ Nest1.NestVal2 ] = "22"}', G=self.G).items():
+            self.assertEqual(k, v)
+            self.assertEqual(type(k), type(v))
+
+    def test_global_array_invalid(self):
+        try:
+            unserialize('{ [Val1], [Nest1.NestVal1] }', G=self.G)    # simple key should not have bracket
+            self.assertTrue(False)
+        except:
+            self.assertTrue(True)
+            
+    def test_global_dict_invalid(self):
+        try:
+            unserialize('{ Nest1.NestVal1 = "SHOULD_FAIL" }', G=self.G)  # expression key must have bracket
+            self.assertTrue(False)
+        except:
+            self.assertTrue(True)
 
 if __name__ == "__main__":
     unittest.main()

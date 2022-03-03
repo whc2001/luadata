@@ -1,7 +1,7 @@
 import math
 
 
-def unserialize(raw, encoding="utf-8", multival=False, verbose=False):
+def unserialize(raw, encoding="utf-8", multival=False, verbose=False, G=None):
     """Unserialize stringified lua data to python data
 
     Args:
@@ -29,6 +29,17 @@ def unserialize(raw, encoding="utf-8", multival=False, verbose=False):
     comment = None
     component_name = None
     errmsg = None
+    G = G or {}
+
+    def get_global_by_path(path):
+        keys = path.split('.')
+        current = G
+        for key in keys:
+            if key in current:
+                current = current[key]
+            else:
+                return None
+        return current
 
     def sorter(kv):
         if isinstance(kv[0], int):
@@ -133,6 +144,11 @@ def unserialize(raw, encoding="utf-8", multival=False, verbose=False):
                 component_name = "VALUE"
                 pos1 = pos + 1
                 byte_quoting_char = byte_current
+            elif ((byte_current >= b"A" and byte_current <= b"Z")
+                or (byte_current >= b"a" and byte_current <= b"z")):
+                state = "EXP"
+                component_name = "VALUE"
+                pos1 = pos
             elif byte_current == b"-" or (
                 byte_current >= b"0" and byte_current <= b"9"
             ):
@@ -143,16 +159,6 @@ def unserialize(raw, encoding="utf-8", multival=False, verbose=False):
                 state = "FLOAT"
                 component_name = "VALUE"
                 pos1 = pos
-            elif byte_current == b"t" and sbins[pos : pos + 4] == b"true":
-                node_entries_append(node, key, True)
-                state = "VALUE_END"
-                key = None
-                pos = pos + 3
-            elif byte_current == b"f" and sbins[pos : pos + 5] == b"false":
-                node_entries_append(node, key, False)
-                state = "VALUE_END"
-                key = None
-                pos = pos + 4
             elif byte_current == b"{":
                 stack.append({"node": node, "state": state, "key": key})
                 state = "SEEK_CHILD"
@@ -213,6 +219,34 @@ def unserialize(raw, encoding="utf-8", multival=False, verbose=False):
                         key = None
                         pos = pos - 1
                     data = None
+        elif state == "EXP":
+            if (byte_current is None) or not (
+                (byte_current >= b"A" and byte_current <= b"Z")
+                or (byte_current >= b"a" and byte_current <= b"z")
+                or (byte_current >= b"0" and byte_current <= b"9")
+                or byte_current == b"_" or byte_current == b"."
+            ):
+                iden = sbins[pos1:pos].decode(encoding)
+                if iden == "true":
+                    data = True
+                elif iden == "false":
+                    data = False
+                else:
+                    data = get_global_by_path(iden)
+                if data != None:
+                    if component_name == "KEY":
+                        key = data
+                        state = "KEY_EXPRESSION_FINISH"
+                        pos = pos - 1
+                    elif component_name == "VALUE":
+                        node_entries_append(node, key, data)
+                        state = "VALUE_END"
+                        key = None
+                        pos = pos - 1
+                else:
+                    errmsg = "unable to find global " + iden
+                    break
+                data = None
         elif state == "VALUE_END":
             if byte_current is None:
                 pass
@@ -245,9 +279,14 @@ def unserialize(raw, encoding="utf-8", multival=False, verbose=False):
                 component_name = "KEY"
                 pos1 = pos + 1
                 byte_quoting_char = byte_current
+            elif ((byte_current >= b"A" and byte_current <= b"Z")
+                or (byte_current >= b"a" and byte_current <= b"z")):
+                state = "EXP"
+                component_name = "KEY"
+                pos1 = pos
             elif byte_current == b"-" or (
                 byte_current >= b"0" and byte_current <= b"9"
-            ):
+                ):
                 state = "INT"
                 component_name = "KEY"
                 pos1 = pos
@@ -305,7 +344,7 @@ def unserialize(raw, encoding="utf-8", multival=False, verbose=False):
                 (byte_current >= b"A" and byte_current <= b"Z")
                 or (byte_current >= b"a" and byte_current <= b"z")
                 or (byte_current >= b"0" and byte_current <= b"9")
-                or byte_current == b"_"
+                or byte_current == b"_" or byte_current == b"."
             ):
                 key = sbins[pos1:pos].decode(encoding)
                 state = "KEY_SIMPLE_END"
@@ -320,6 +359,9 @@ def unserialize(raw, encoding="utf-8", multival=False, verbose=False):
                 comment = "INLINE"
                 pos = pos + 1
             elif byte_current == b"=":
+                if "." in key:
+                    errmsg = "invalid simple key"
+                    break
                 state = "VALUE"
             elif byte_current == b"," or byte_current == b"}":
                 if key == "true":
@@ -333,9 +375,16 @@ def unserialize(raw, encoding="utf-8", multival=False, verbose=False):
                     key = None
                     pos = pos - 1
                 else:
-                    key = None
-                    errmsg = "invalied table simple key character."
-                    break
+                    data = get_global_by_path(key)
+                    if data != None:
+                        node_entries_append(node, node["lualen"] + 1, data)
+                        state = "VALUE_END"
+                        key = None
+                        pos = pos - 1
+                    else:
+                        key = None
+                        errmsg = "invalied table simple key character."
+                        break
         pos += 1
         if verbose:
             print("          ", pos, "    ", state, comment, key, node)
